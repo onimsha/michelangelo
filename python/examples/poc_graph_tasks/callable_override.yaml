@@ -1,0 +1,50 @@
+# Declarative author YAML — callable override POC.
+# `evaluator` names its task function through a parameter. Override per run,
+# no YAML edit. The string resolves in the process that runs the task:
+#   local:  python -m examples.poc_graph_tasks.runner <this file> --param evaluator_fn=...
+#   remote: PipelineRun spec.input.workflow_config.parameters (see the michelangelo fork branch poc/callable-local-run)
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: declarative-callable-override
+  namespace: ma-dev-test
+  annotations:
+    michelangelo/uniflow-image: michelangelo-poc-tasks:main
+spec:
+  description: Declarative POC — task function chosen by parameter
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    content:
+      schemaVersion: v1alpha1
+      parameters:
+        evaluator_fn:
+          default: examples.poc_graph_tasks.tasks.default_eval
+        model_name:
+          default: baseline
+      workflowConfig:
+        maxConcurrency: 2
+      tasks:
+        train:
+          taskFunction: core/ray
+          config:
+            entry_point: examples.poc_graph_tasks.tasks.echo_task
+            args: ["{{ params.model_name }}"]
+          jobSpecs:
+            ray: {head_cpu: 1, head_memory: "2Gi", worker_instances: 0}
+        evaluator:
+          taskFunction: core/ray
+          dependsOn: [{task: train}]
+          config:
+            entry_point: "{{ params.evaluator_fn }}"
+            args: ["{{ tasks.train.output.echo }}"]
+          jobSpecs:
+            ray: {head_cpu: 1, head_memory: "2Gi", worker_instances: 0}
+        report:
+          taskFunction: core/ray
+          dependsOn: [{task: evaluator}]
+          config:
+            entry_point: examples.poc_graph_tasks.tasks.echo_task
+            args: ["{{ tasks.evaluator.output.evaluator }} scored {{ tasks.evaluator.output.score }}"]
+          jobSpecs:
+            ray: {head_cpu: 1, head_memory: "2Gi", worker_instances: 0}

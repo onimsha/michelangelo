@@ -1,0 +1,33 @@
+# Failure semantics for the local runner: `train` fails, `evaluator` is
+# skipped (gate SUCCEEDED unmet), `on_failure` runs (gate FAILED met), the
+# run ends FAILED. Mirrors poc/fixtures/diamond_failure.star.
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: declarative-callable-failure
+  namespace: ma-dev-test
+  annotations:
+    michelangelo/uniflow-image: michelangelo-poc-tasks:main
+spec:
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_DECLARATIVE
+    content:
+      schemaVersion: v1alpha1
+      parameters:
+        evaluator_fn: {default: examples.poc_graph_tasks.tasks.default_eval}
+      tasks:
+        train:
+          taskFunction: core/ray
+          config: {entry_point: examples.poc_graph_tasks.tasks.fail_task, args: [0, "boom"]}
+          jobSpecs: {ray: {head_cpu: 1, head_memory: "2Gi", worker_instances: 0}}
+        evaluator:
+          taskFunction: core/ray
+          dependsOn: [{task: train}]
+          config: {entry_point: "{{ params.evaluator_fn }}", args: ["{{ tasks.train.output }}"]}
+          jobSpecs: {ray: {head_cpu: 1, head_memory: "2Gi", worker_instances: 0}}
+        on_failure:
+          taskFunction: core/ray
+          dependsOn: [{task: train, when: FAILED}]
+          config: {entry_point: examples.poc_graph_tasks.tasks.echo_task, args: ["train failed"]}
+          jobSpecs: {ray: {head_cpu: 1, head_memory: "2Gi", worker_instances: 0}}
