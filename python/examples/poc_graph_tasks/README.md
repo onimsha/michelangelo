@@ -131,7 +131,10 @@ tasks:
 - `{{ params.X }}` reads a parameter. `{{ tasks.X.output.FIELD }}` reads an
   upstream result. A whole-string reference keeps its JSON type.
 - `dependsOn[].when` is `SUCCEEDED` (default), `FAILED`, or `COMPLETED`.
-  A skipped task satisfies no gate.
+  A skipped task satisfies no gate. These are mactl short forms; the wire
+  carries the full enum names (`OUTCOME_FAILED`), and mactl maps them
+  before it packs the manifest. The same applies to `parameters.X.type`
+  (`integer` → `PARAMETER_TYPE_INTEGER`).
 
 ## Not covered on this branch
 
